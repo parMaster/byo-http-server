@@ -9,3 +9,5 @@
 module github.com/codecrafters-io/http-server-starter-go
 
 go 1.22
+
+require github.com/go-pkgz/lgr v0.11.1
