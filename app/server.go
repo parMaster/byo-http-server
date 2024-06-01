@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
 )
@@ -81,6 +82,17 @@ func (s *Server) respond(req Request) Response {
 				resp.body = []byte(urls[2])
 				return *resp
 			}
+			if urls[1] == "user-agent" {
+				if ua, ok := req.headers["User-Agent"]; ok {
+					resp.headers["Content-Type"] = "text/plain"
+					resp.headers["Content-Length"] = strconv.Itoa(len(ua))
+					resp.body = []byte(ua)
+					return *resp
+				}
+			}
+			resp.code = http.StatusBadRequest
+			resp.reason = "Bad Request"
+
 		}
 
 		// not found
