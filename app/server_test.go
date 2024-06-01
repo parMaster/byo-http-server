@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"log"
+	"os"
 	"strings"
 	"testing"
 
@@ -110,4 +111,50 @@ func Test_Echo(t *testing.T) {
 	assert.Equal(t, []byte("qwe"), response.body)
 
 	log.Println(response.format())
+}
+
+func Test_SetPort(t *testing.T) {
+
+	s := NewServer(12345)
+	assert.Equal(t, "0.0.0.0:12345", s.addr)
+}
+
+func Test_WithDirectory(t *testing.T) {
+	s := NewServer(0)
+	err := s.WithDirectory("")
+	assert.Error(t, err)
+
+	os.Mkdir("testdir", 0644)
+	err = s.WithDirectory("testdir")
+	assert.NoError(t, err)
+	os.Remove("testdir")
+}
+
+func Test_Files(t *testing.T) {
+	s := NewServer(0)
+
+	os.Mkdir("testdir", 0755)
+	err := os.WriteFile("testdir/testfile.oct", []byte("content"), 0755)
+	assert.NoError(t, err)
+	err = s.WithDirectory("testdir")
+	assert.NoError(t, err)
+
+	r := "GET /files/testfile.oct HTTP/1.1\r\n"
+	r += "Host: localhost:4221\r\n"
+	r += "User-Agent: curl/8.4.0\r\n"
+	r += "Accept: */*\r\n\r\n"
+
+	reader := bufio.NewReader(strings.NewReader(r))
+	request := Request{}
+
+	err = request.Read(reader)
+	assert.NoError(t, err)
+
+	response := s.respond(request)
+	assert.Equal(t, response.code, 200)
+	assert.Equal(t, response.reason, "OK")
+	assert.Equal(t, []byte("content"), response.body)
+
+	log.Println(response.format())
+
 }
