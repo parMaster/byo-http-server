@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"log"
 	"strings"
 	"testing"
 
@@ -86,5 +87,27 @@ func Test_404Response(t *testing.T) {
 	response := s.respond(request)
 	assert.Equal(t, 404, response.code)
 	assert.Equal(t, "Not Found", response.reason)
+}
 
+func Test_Echo(t *testing.T) {
+
+	r := "GET /echo/qwe HTTP/1.1\r\n"
+	r += "Host: localhost:4221\r\n"
+	r += "User-Agent: curl/8.4.0\r\n"
+	r += "Accept: */*\r\n\r\n"
+
+	reader := bufio.NewReader(strings.NewReader(r))
+	request := Request{}
+
+	err := request.Read(reader)
+	assert.NoError(t, err)
+
+	s := NewServer(0)
+
+	response := s.respond(request)
+	assert.Equal(t, response.code, 200)
+	assert.Equal(t, response.reason, "OK")
+	assert.Equal(t, []byte("qwe"), response.body)
+
+	log.Println(response.format())
 }
