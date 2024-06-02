@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -55,8 +56,6 @@ func (s *Server) ListenAndServe() error {
 
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
-	// reader := bufio.NewReader(conn)
-	// for {
 	request := Request{}
 	err := request.ReadConn(conn)
 	if err != nil {
@@ -72,7 +71,6 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	resp := s.respond(request)
 	conn.Write([]byte(resp.format()))
-	// }
 }
 
 // primitive router
@@ -81,11 +79,20 @@ func (s *Server) respond(req Request) Response {
 
 	req.target = strings.Trim(req.target, "/")
 
-	if req.method == "GET" {
+	// Accept-Encoding: gzip
+	if encoding, ok := req.headers["Accept-Encoding"]; ok {
+		acceptEncodings := []string{
+			"gzip",
+		}
+		if slices.Contains(acceptEncodings, encoding) {
+			resp.headers["Content-Encoding"] = encoding
+		}
+	}
+
+	if strings.ToUpper(req.method) == "GET" {
 
 		resp.code = 200
 		resp.reason = "OK"
-		resp.headers = map[string]string{}
 		resp.body = []byte{}
 
 		if req.target == "" {
@@ -137,7 +144,7 @@ func (s *Server) respond(req Request) Response {
 		resp.reason = "Not Found"
 	}
 
-	if req.method == "POST" {
+	if strings.ToUpper(req.method) == "POST" {
 		resp.code = 200
 		resp.reason = "OK"
 		resp.headers = map[string]string{}

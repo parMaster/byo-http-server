@@ -1,6 +1,8 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Response struct {
 	code    int
@@ -13,6 +15,7 @@ type Response struct {
 func NewResponse() *Response {
 	r := Response{
 		version: "HTTP/1.1",
+		headers: map[string]string{},
 	}
 	return &r
 }

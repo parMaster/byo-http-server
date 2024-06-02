@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,7 +27,7 @@ func Test_ReadRequest(t *testing.T) {
 	r += "Accept: */*\r\n\r\n"
 
 	request := Request{}
-	err := request.Read(r)
+	err := request.Parse(r)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "GET", request.method)
@@ -46,14 +47,14 @@ func Test_ReadTwoRequests(t *testing.T) {
 	r += "Accept: */*\r\n\r\n"
 
 	request := Request{}
-	err := request.Read(r)
+	err := request.Parse(r)
 	assert.NoError(t, err)
 
 	r = "GET /qwe/rty HTTP/1.1\r\n"
 	r += "Host: localhost:4221\r\n"
 	r += "User-Agent: curl/8.4.0\r\n"
 	r += "Accept: */*\r\n\r\n"
-	err = request.Read(r)
+	err = request.Parse(r)
 	assert.NoError(t, err)
 
 }
@@ -66,7 +67,7 @@ func Test_404Response(t *testing.T) {
 	r += "Accept: */*\r\n\r\n"
 
 	request := Request{}
-	err := request.Read(r)
+	err := request.Parse(r)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "GET", request.method)
@@ -92,7 +93,7 @@ func Test_Echo(t *testing.T) {
 	r += "Accept: */*\r\n\r\n"
 
 	request := Request{}
-	err := request.Read(r)
+	err := request.Parse(r)
 	assert.NoError(t, err)
 
 	s := NewServer(0)
@@ -137,7 +138,7 @@ func Test_Files(t *testing.T) {
 	r += "Accept: */*\r\n\r\n"
 
 	request := Request{}
-	err = request.Read(r)
+	err = request.Parse(r)
 	assert.NoError(t, err)
 
 	response := s.respond(request)
@@ -162,7 +163,7 @@ func Test_PostFiles(t *testing.T) {
 	r += "received"
 
 	request := Request{}
-	err = request.Read(r)
+	err = request.Parse(r)
 	assert.NoError(t, err)
 
 	response := s.respond(request)
@@ -174,4 +175,40 @@ func Test_PostFiles(t *testing.T) {
 	assert.Equal(t, "received", string(created))
 
 	log.Println(response.format())
+}
+
+func Test_AcceptEncoding(t *testing.T) {
+	s := NewServer(0)
+
+	// // valid encoding
+	r := "GET /echo/qwe HTTP/1.1\r\n"
+	r += "Accept-Encoding: gzip\r\n"
+
+	request := Request{}
+	err := request.Parse(r)
+	assert.NoError(t, err)
+
+	response := s.respond(request)
+	assert.Equal(t, response.code, 200)
+	assert.Equal(t, response.reason, "OK")
+	keys := []string{}
+	for k := range response.headers {
+		keys = append(keys, strings.ToLower(k))
+	}
+	assert.Contains(t, keys, "content-encoding")
+
+	// invalid encoding
+	r = "GET /echo/qwe HTTP/1.1\r\n"
+	r += "Accept-Encoding: invalid-encoding\r\n"
+	err = request.Parse(r)
+	assert.NoError(t, err)
+	response = s.respond(request)
+	assert.Equal(t, response.code, 200)
+	assert.Equal(t, response.reason, "OK")
+	keys = []string{}
+	for k := range response.headers {
+		keys = append(keys, strings.ToLower(k))
+	}
+	assert.NotContains(t, keys, "content-encoding")
+
 }

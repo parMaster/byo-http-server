@@ -16,7 +16,7 @@ type Request struct {
 	body    []byte
 }
 
-func (req *Request) Read(buffStr string) error {
+func (req *Request) Parse(buffStr string) error {
 	parts := strings.Split(buffStr, "\r\n\r\n")
 	if len(parts) == 0 {
 		return fmt.Errorf("empty request")
@@ -42,7 +42,9 @@ func (req *Request) Read(buffStr string) error {
 	if len(header) > 1 {
 		for _, line := range header[1:] {
 			parts := strings.SplitN(line, ":", 2)
-			headers[parts[0]] = strings.Trim(parts[1], " \r\n")
+			if len(parts) == 2 {
+				headers[parts[0]] = strings.Trim(parts[1], " \r\n")
+			}
 		}
 	}
 	req.headers = headers
@@ -54,8 +56,6 @@ func (req *Request) Read(buffStr string) error {
 }
 
 func (req *Request) ReadConn(conn net.Conn) error {
-	// https://datatracker.ietf.org/doc/html/rfc9112#name-message-format
-
 	buff := []byte{}
 	buf := make([]byte, 1024)
 	n, err := conn.Read(buf)
@@ -68,5 +68,5 @@ func (req *Request) ReadConn(conn net.Conn) error {
 	buff = slices.Concat(buff, buf)
 	buffStr := strings.Trim(string(buff), "\x00")
 
-	return req.Read(buffStr)
+	return req.Parse(buffStr)
 }
