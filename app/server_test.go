@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"log"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,9 +25,8 @@ func Test_ReadRequest(t *testing.T) {
 	r += "User-Agent: curl/8.4.0\r\n"
 	r += "Accept: */*\r\n\r\n"
 
-	reader := bufio.NewReader(strings.NewReader(r))
 	request := Request{}
-	err := request.Read(reader)
+	err := request.Read(r)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "GET", request.method)
@@ -47,18 +44,16 @@ func Test_ReadTwoRequests(t *testing.T) {
 	r += "Host: localhost:4221\r\n"
 	r += "User-Agent: curl/8.4.0\r\n"
 	r += "Accept: */*\r\n\r\n"
-	r += "GET /qwe/rty HTTP/1.1\r\n"
+
+	request := Request{}
+	err := request.Read(r)
+	assert.NoError(t, err)
+
+	r = "GET /qwe/rty HTTP/1.1\r\n"
 	r += "Host: localhost:4221\r\n"
 	r += "User-Agent: curl/8.4.0\r\n"
 	r += "Accept: */*\r\n\r\n"
-
-	reader := bufio.NewReader(strings.NewReader(r))
-	request := Request{}
-
-	err := request.Read(reader)
-	assert.NoError(t, err)
-
-	err = request.Read(reader)
+	err = request.Read(r)
 	assert.NoError(t, err)
 
 }
@@ -70,9 +65,8 @@ func Test_404Response(t *testing.T) {
 	r += "User-Agent: curl/8.4.0\r\n"
 	r += "Accept: */*\r\n\r\n"
 
-	reader := bufio.NewReader(strings.NewReader(r))
 	request := Request{}
-	err := request.Read(reader)
+	err := request.Read(r)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "GET", request.method)
@@ -97,10 +91,8 @@ func Test_Echo(t *testing.T) {
 	r += "User-Agent: curl/8.4.0\r\n"
 	r += "Accept: */*\r\n\r\n"
 
-	reader := bufio.NewReader(strings.NewReader(r))
 	request := Request{}
-
-	err := request.Read(reader)
+	err := request.Read(r)
 	assert.NoError(t, err)
 
 	s := NewServer(0)
@@ -144,10 +136,8 @@ func Test_Files(t *testing.T) {
 	r += "User-Agent: curl/8.4.0\r\n"
 	r += "Accept: */*\r\n\r\n"
 
-	reader := bufio.NewReader(strings.NewReader(r))
 	request := Request{}
-
-	err = request.Read(reader)
+	err = request.Read(r)
 	assert.NoError(t, err)
 
 	response := s.respond(request)
@@ -156,5 +146,32 @@ func Test_Files(t *testing.T) {
 	assert.Equal(t, []byte("content"), response.body)
 
 	log.Println(response.format())
+}
 
+func Test_PostFiles(t *testing.T) {
+	s := NewServer(0)
+
+	os.Mkdir("testdir", 0755)
+	err := s.WithDirectory("testdir")
+	assert.NoError(t, err)
+
+	r := "POST /files/received_file.txt HTTP/1.1\r\n"
+	r += "Host: localhost:4221\r\n"
+	r += "User-Agent: curl/8.4.0\r\n"
+	r += "Accept: */*\r\n\r\n"
+	r += "received"
+
+	request := Request{}
+	err = request.Read(r)
+	assert.NoError(t, err)
+
+	response := s.respond(request)
+	assert.Equal(t, response.code, 201)
+	assert.Equal(t, response.reason, "Created")
+
+	created, err := os.ReadFile("testdir/received_file.txt")
+	assert.NoError(t, err)
+	assert.Equal(t, "received", string(created))
+
+	log.Println(response.format())
 }

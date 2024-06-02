@@ -1,9 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
+	"net"
+	"slices"
 	"strings"
 )
 
@@ -15,47 +16,57 @@ type Request struct {
 	body    []byte
 }
 
-func (req *Request) Read(reader *bufio.Reader) error {
-	// https://datatracker.ietf.org/doc/html/rfc9112#name-message-format
-	// GET /qwe/rty HTTP/1.1
-	startLine, err := reader.ReadString('\n')
-	if err != nil {
-		err := fmt.Errorf("error reading start-line: %w", err)
-		return err
+func (req *Request) Read(buffStr string) error {
+	parts := strings.Split(buffStr, "\r\n\r\n")
+	if len(parts) == 0 {
+		return fmt.Errorf("empty request")
 	}
-	startLine = strings.Trim(startLine, "\r\n")
-	startLineParts := strings.Split(startLine, " ")
 
+	// headers
+	header := strings.Split(parts[0], "\r\n")
+
+	// body
+	if len(parts) > 1 {
+		req.body = []byte(parts[1])
+		log.Printf("[DEBUG] body read: %v", string(req.body))
+	}
+
+	// GET /qwe/rty HTTP/1.1
+	startLine := strings.Trim(header[0], "\r\n")
+	startLineParts := strings.Split(startLine, " ")
 	req.method = startLineParts[0]
 	req.target = startLineParts[1]
 	req.version = startLineParts[2]
 
-	// headers are optional. example:
-	// Host: localhost:4221
-	// User-Agent: curl/8.4.0
-	// Accept: */*
 	headers := map[string]string{}
-	for {
-		headerLine, err := reader.ReadString('\n')
-		if err != nil {
-			log.Printf("[ERROR] error reading string: %e", err)
-		}
-		// reached the end of the headers section?
-		if headerLine == "\r\n" {
-			req.headers = headers
-			break
-		}
-		headerLineParts := strings.SplitN(headerLine, ":", 2)
-		if len(headerLineParts) == 2 {
-			headerLineParts[1] = strings.Trim(headerLineParts[1], "\r\n")
-			headers[headerLineParts[0]] = strings.TrimSpace(headerLineParts[1])
+	if len(header) > 1 {
+		for _, line := range header[1:] {
+			parts := strings.SplitN(line, ":", 2)
+			headers[parts[0]] = strings.Trim(parts[1], " \r\n")
 		}
 	}
-
-	req.body = []byte{}
+	req.headers = headers
 
 	log.Printf("[DEBUG] startLineParts: %v", startLineParts)
 	log.Printf("[DEBUG] headers: %v", headers)
 
 	return nil
+}
+
+func (req *Request) ReadConn(conn net.Conn) error {
+	// https://datatracker.ietf.org/doc/html/rfc9112#name-message-format
+
+	buff := []byte{}
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if n == 0 {
+		return err
+	}
+	if err != nil {
+		return err // connection closed
+	}
+	buff = slices.Concat(buff, buf)
+	buffStr := strings.Trim(string(buff), "\x00")
+
+	return req.Read(buffStr)
 }

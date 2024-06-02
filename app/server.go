@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -55,29 +54,32 @@ func (s *Server) ListenAndServe() error {
 }
 
 func (s *Server) handleConnection(conn net.Conn) {
-	reader := bufio.NewReader(conn)
-	for {
-		request := Request{}
-		err := request.Read(reader)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				log.Printf("[INFO] Connection closed (EOF)")
-				return // connection closed
-			} else {
-				log.Printf("[ERROR] %v", err)
-				continue
-			}
+	defer conn.Close()
+	// reader := bufio.NewReader(conn)
+	// for {
+	request := Request{}
+	err := request.ReadConn(conn)
+	if err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+			log.Printf("[INFO] Connection closed (EOF)")
+			return // connection closed
+		} else {
+			log.Printf("[ERROR] %v", err)
+			return
 		}
-		log.Printf("[DEBUG] request parsed: %+v", request)
-
-		resp := s.respond(request)
-		conn.Write([]byte(resp.format()))
 	}
+	log.Printf("[DEBUG] request parsed: %+v", request)
+
+	resp := s.respond(request)
+	conn.Write([]byte(resp.format()))
+	// }
 }
 
 // primitive router
 func (s *Server) respond(req Request) Response {
 	resp := NewResponse()
+
+	req.target = strings.Trim(req.target, "/")
 
 	if req.method == "GET" {
 
@@ -86,11 +88,9 @@ func (s *Server) respond(req Request) Response {
 		resp.headers = map[string]string{}
 		resp.body = []byte{}
 
-		if req.target == "/" {
+		if req.target == "" {
 			return *resp
 		}
-
-		req.target = strings.Trim(req.target, "/")
 
 		urls := strings.Split(req.target, "/")
 		if len(urls) > 0 {
@@ -109,16 +109,10 @@ func (s *Server) respond(req Request) Response {
 				}
 			}
 			if urls[0] == "files" && len(urls) > 1 {
-				log.Printf("files request: %v", urls)
+				log.Printf("files GET request: %v", urls)
 				fileName := urls[1]
-				wd, err := os.Getwd()
-				if err != nil {
-					resp.code = http.StatusInternalServerError
-					resp.reason = "error getting work directory"
-				}
-				log.Printf("wd: %v, s.dir: %s", wd, s.dir)
 				fileName = filepath.Join(s.dir, fileName)
-				_, err = os.Stat(fileName)
+				_, err := os.Stat(fileName)
 				if err != nil {
 					resp.code = http.StatusNotFound
 					resp.reason = "Not Found"
@@ -141,6 +135,47 @@ func (s *Server) respond(req Request) Response {
 		// not found
 		resp.code = 404
 		resp.reason = "Not Found"
+	}
+
+	if req.method == "POST" {
+		resp.code = 200
+		resp.reason = "OK"
+		resp.headers = map[string]string{}
+		resp.body = []byte{}
+
+		urls := strings.Split(req.target, "/")
+		if len(urls) > 0 {
+			if urls[0] == "files" && len(urls) > 1 {
+				log.Printf("[DEBUG] files POST request: %v", urls)
+				fileName := urls[1]
+				fileName = filepath.Join(s.dir, fileName)
+				log.Printf("[DEBUG] writing to file: %v", fileName)
+
+				_, err := os.Stat(s.dir)
+				if err != nil {
+					err = fmt.Errorf("error stat dir: %w", err)
+					log.Printf("[ERROR] %v", err)
+					err = os.MkdirAll(s.dir, 0o644)
+					err = fmt.Errorf("error mkdirall: %w", err)
+					log.Printf("[ERROR] %v", err)
+				}
+
+				err = os.WriteFile(fileName, req.body, 0o644)
+				if err != nil {
+					err = fmt.Errorf("error writing to file: %w", err)
+					log.Printf("[ERROR] %v", err)
+
+					resp.code = http.StatusInternalServerError
+					resp.reason = "Internal server error"
+				}
+				resp.code = 201
+				resp.reason = "Created"
+
+				return *resp
+			}
+			resp.code = http.StatusBadRequest
+			resp.reason = "Bad Request"
+		}
 	}
 
 	return *resp
