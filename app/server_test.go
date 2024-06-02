@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,7 +15,7 @@ func Test_OKResponse(t *testing.T) {
 	r.reason = "OK"
 	r.headers = map[string]string{}
 	r.body = []byte{}
-	assert.Equal(t, "HTTP/1.1 200 OK\r\n\r\n", r.format())
+	assert.Equal(t, "HTTP/1.1 200 OK\r\n\r\n", r.render())
 }
 
 func Test_ReadRequest(t *testing.T) {
@@ -103,7 +102,7 @@ func Test_Echo(t *testing.T) {
 	assert.Equal(t, response.reason, "OK")
 	assert.Equal(t, []byte("qwe"), response.body)
 
-	log.Println(response.format())
+	log.Println(response.render())
 }
 
 func Test_SetPort(t *testing.T) {
@@ -146,7 +145,7 @@ func Test_Files(t *testing.T) {
 	assert.Equal(t, response.reason, "OK")
 	assert.Equal(t, []byte("content"), response.body)
 
-	log.Println(response.format())
+	log.Println(response.render())
 }
 
 func Test_PostFiles(t *testing.T) {
@@ -174,7 +173,7 @@ func Test_PostFiles(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "received", string(created))
 
-	log.Println(response.format())
+	log.Println(response.render())
 }
 
 func Test_AcceptEncoding(t *testing.T) {
@@ -191,11 +190,8 @@ func Test_AcceptEncoding(t *testing.T) {
 	response := s.respond(request)
 	assert.Equal(t, response.code, 200)
 	assert.Equal(t, response.reason, "OK")
-	keys := []string{}
-	for k := range response.headers {
-		keys = append(keys, strings.ToLower(k))
-	}
-	assert.Contains(t, keys, "content-encoding")
+	strResponse := response.render()
+	assert.Contains(t, strResponse, "Content-Encoding: gzip")
 
 	// invalid encoding
 	r = "GET /echo/qwe HTTP/1.1\r\n"
@@ -205,11 +201,8 @@ func Test_AcceptEncoding(t *testing.T) {
 	response = s.respond(request)
 	assert.Equal(t, response.code, 200)
 	assert.Equal(t, response.reason, "OK")
-	keys = []string{}
-	for k := range response.headers {
-		keys = append(keys, strings.ToLower(k))
-	}
-	assert.NotContains(t, keys, "content-encoding")
+	strResponse = response.render()
+	assert.NotContains(t, strResponse, "Content-Encoding")
 }
 
 func Test_AcceptMultipleEncoding(t *testing.T) {
@@ -226,11 +219,8 @@ func Test_AcceptMultipleEncoding(t *testing.T) {
 	response := s.respond(request)
 	assert.Equal(t, response.code, 200)
 	assert.Equal(t, response.reason, "OK")
-	keys := []string{}
-	for k := range response.headers {
-		keys = append(keys, strings.ToLower(k))
-	}
-	assert.Contains(t, keys, "content-encoding")
+	strResponse := response.render()
+	assert.Contains(t, strResponse, "Content-Encoding: gzip")
 
 	// invalid encoding
 	r = "GET /echo/qwe HTTP/1.1\r\n"
@@ -240,9 +230,26 @@ func Test_AcceptMultipleEncoding(t *testing.T) {
 	response = s.respond(request)
 	assert.Equal(t, response.code, 200)
 	assert.Equal(t, response.reason, "OK")
-	keys = []string{}
-	for k := range response.headers {
-		keys = append(keys, strings.ToLower(k))
-	}
-	assert.NotContains(t, keys, "content-encoding")
+	strResponse = response.render()
+	assert.NotContains(t, strResponse, "Content-Encoding")
+}
+
+func Test_GzipEncoding(t *testing.T) {
+	s := NewServer(0)
+
+	// // valid encoding
+	r := "GET /echo/foo HTTP/1.1\r\n"
+	r += "Accept-Encoding: gzip\r\n"
+
+	request := Request{}
+	err := request.Parse(r)
+	assert.NoError(t, err)
+
+	response := s.respond(request)
+	assert.Equal(t, response.code, 200)
+	assert.Equal(t, response.reason, "OK")
+	strResponse := response.render()
+	assert.Contains(t, strResponse, "Content-Encoding: gzip")
+
+	log.Println(strResponse)
 }

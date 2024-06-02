@@ -16,6 +16,7 @@ type Request struct {
 	body    []byte
 }
 
+// Parse parses request from string
 func (req *Request) Parse(buffStr string) error {
 	parts := strings.Split(buffStr, "\r\n\r\n")
 	if len(parts) == 0 {
@@ -35,7 +36,7 @@ func (req *Request) Parse(buffStr string) error {
 	startLine := strings.Trim(header[0], "\r\n")
 	startLineParts := strings.Split(startLine, " ")
 	req.method = startLineParts[0]
-	req.target = startLineParts[1]
+	req.target = strings.Trim(startLineParts[1], "/")
 	req.version = startLineParts[2]
 
 	headers := map[string]string{}
@@ -50,11 +51,12 @@ func (req *Request) Parse(buffStr string) error {
 	req.headers = headers
 
 	log.Printf("[DEBUG] startLineParts: %v", startLineParts)
-	log.Printf("[DEBUG] headers: %v", headers)
+	log.Printf("[DEBUG] headers parsed: %v", headers)
 
 	return nil
 }
 
+// ReadConn reads request from connection and calls Parse on it
 func (req *Request) ReadConn(conn net.Conn) error {
 	buff := []byte{}
 	buf := make([]byte, 1024)

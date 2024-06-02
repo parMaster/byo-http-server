@@ -26,6 +26,7 @@ func NewServer(port int) *Server {
 	return &s
 }
 
+// WithDirectory sets directory to serve files from
 func (s *Server) WithDirectory(dir string) error {
 	if dir != "" {
 		_, err := os.Stat(dir)
@@ -70,14 +71,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 	log.Printf("[DEBUG] request parsed: %+v", request)
 
 	resp := s.respond(request)
-	conn.Write([]byte(resp.format()))
+	conn.Write([]byte(resp.render()))
 }
 
 // primitive router
 func (s *Server) respond(req Request) Response {
 	resp := NewResponse()
-
-	req.target = strings.Trim(req.target, "/")
 
 	// Accept-Encoding: gzip
 	if encodings, ok := req.headers["Accept-Encoding"]; ok {
@@ -88,7 +87,7 @@ func (s *Server) respond(req Request) Response {
 		for _, encoding := range strings.Split(encodings, ",") {
 			encoding = strings.TrimSpace(encoding)
 			if slices.Contains(acceptEncodings, encoding) {
-				resp.headers["Content-Encoding"] = encoding
+				resp.compression = encoding
 				break
 			}
 		}
@@ -100,6 +99,7 @@ func (s *Server) respond(req Request) Response {
 		resp.code = 200
 		resp.reason = "OK"
 		resp.body = []byte{}
+		resp.headers["Content-Type"] = "text/plain"
 
 		if req.target == "" {
 			return *resp
@@ -108,15 +108,11 @@ func (s *Server) respond(req Request) Response {
 		urls := strings.Split(req.target, "/")
 		if len(urls) > 0 {
 			if urls[0] == "echo" && len(urls) > 1 {
-				resp.headers["Content-Type"] = "text/plain"
-				resp.headers["Content-Length"] = strconv.Itoa(len(urls[1]))
 				resp.body = []byte(urls[1])
 				return *resp
 			}
 			if urls[0] == "user-agent" {
 				if ua, ok := req.headers["User-Agent"]; ok {
-					resp.headers["Content-Type"] = "text/plain"
-					resp.headers["Content-Length"] = strconv.Itoa(len(ua))
 					resp.body = []byte(ua)
 					return *resp
 				}
@@ -137,7 +133,6 @@ func (s *Server) respond(req Request) Response {
 					resp.reason = "error reading file" + fileName
 				}
 				resp.headers["Content-Type"] = "application/octet-stream"
-				resp.headers["Content-Length"] = strconv.Itoa(len(cont))
 				resp.body = []byte(cont)
 				return *resp
 			}
