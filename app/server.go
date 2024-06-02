@@ -80,13 +80,19 @@ func (s *Server) respond(req Request) Response {
 	req.target = strings.Trim(req.target, "/")
 
 	// Accept-Encoding: gzip
-	if encoding, ok := req.headers["Accept-Encoding"]; ok {
+	if encodings, ok := req.headers["Accept-Encoding"]; ok {
 		acceptEncodings := []string{
 			"gzip",
 		}
-		if slices.Contains(acceptEncodings, encoding) {
-			resp.headers["Content-Encoding"] = encoding
+
+		for _, encoding := range strings.Split(encodings, ",") {
+			encoding = strings.TrimSpace(encoding)
+			if slices.Contains(acceptEncodings, encoding) {
+				resp.headers["Content-Encoding"] = encoding
+				break
+			}
 		}
+
 	}
 
 	if strings.ToUpper(req.method) == "GET" {

@@ -210,5 +210,39 @@ func Test_AcceptEncoding(t *testing.T) {
 		keys = append(keys, strings.ToLower(k))
 	}
 	assert.NotContains(t, keys, "content-encoding")
+}
 
+func Test_AcceptMultipleEncoding(t *testing.T) {
+	s := NewServer(0)
+
+	// // valid encoding
+	r := "GET /echo/qwe HTTP/1.1\r\n"
+	r += "Accept-Encoding: encoding-1, gzip, encoding-2\r\n"
+
+	request := Request{}
+	err := request.Parse(r)
+	assert.NoError(t, err)
+
+	response := s.respond(request)
+	assert.Equal(t, response.code, 200)
+	assert.Equal(t, response.reason, "OK")
+	keys := []string{}
+	for k := range response.headers {
+		keys = append(keys, strings.ToLower(k))
+	}
+	assert.Contains(t, keys, "content-encoding")
+
+	// invalid encoding
+	r = "GET /echo/qwe HTTP/1.1\r\n"
+	r += "Accept-Encoding: invalid-encoding-1, invalid-encoding-2\r\n"
+	err = request.Parse(r)
+	assert.NoError(t, err)
+	response = s.respond(request)
+	assert.Equal(t, response.code, 200)
+	assert.Equal(t, response.reason, "OK")
+	keys = []string{}
+	for k := range response.headers {
+		keys = append(keys, strings.ToLower(k))
+	}
+	assert.NotContains(t, keys, "content-encoding")
 }
